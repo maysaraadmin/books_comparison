@@ -1,0 +1,17 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Comparison Result</title>
+    <style>
+        pre { background: #f4f4f4; padding: 10px; overflow: auto; border: 1px solid #ccc; }
+    </style>
+</head>
+<body>
+    <h1>Comparison Result</h1>
+    <p><strong>{{ doc1_title }}</strong> vs <strong>{{ doc2_title }}</strong></p>
+    <p>Overall similarity: <strong>{{ similarity }}%</strong></p>
+    <h2>Line differences (unified diff)</h2>
+    <pre>{{ diff_text }}</pre>
+    <p><a href="{% url 'compare:upload' %}">Compare another pair</a></p>
+</body>
+</html>

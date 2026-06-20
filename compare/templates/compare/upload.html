@@ -1,0 +1,14 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Compare PDF Books</title>
+</head>
+<body>
+    <h1>Upload two PDF books to compare</h1>
+    <form method="post" enctype="multipart/form-data">
+        {% csrf_token %}
+        {{ form.as_p }}
+        <button type="submit">Compare</button>
+    </form>
+</body>
+</html>
