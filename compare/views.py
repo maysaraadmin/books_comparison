@@ -15,6 +15,7 @@ from .utils import (
     get_line_differences,
     toc_to_text,
     build_marked_text,
+    compare_toc_titles,
 )
 
 logger = logging.getLogger(__name__)
@@ -107,37 +108,74 @@ def process_comparison(job_id):
         doc2.save()
 
         comparison_type = job_data['comparison_type']
+
+        # Default values
+        similarity = 0
+        diff_text = ''
+        toc_comparison = None
+
         if comparison_type == 'full':
             text1, text2 = content1, content2
+            similarity = get_overall_similarity(text1, text2)
+            marked_text1 = build_marked_text(content1, chapters1)
+            marked_text2 = build_marked_text(content2, chapters2)
+            diff_text = get_line_differences(marked_text1, marked_text2,
+                                             fromfile=doc1.file.name,
+                                             tofile=doc2.file.name)
+
         elif comparison_type == 'toc':
             text1, text2 = toc_to_text(index1), toc_to_text(index2)
+            similarity = get_overall_similarity(text1, text2)
+            diff_text = get_line_differences(text1, text2,
+                                             fromfile=doc1.file.name,
+                                             tofile=doc2.file.name)
+
         elif comparison_type == 'chapters':
             text1 = "\n".join([ch['text'] for ch in chapters1])
             text2 = "\n".join([ch['text'] for ch in chapters2])
+            similarity = get_overall_similarity(text1, text2)
+            # Also build marked diff
+            marked_text1 = build_marked_text(content1, chapters1)
+            marked_text2 = build_marked_text(content2, chapters2)
+            diff_text = get_line_differences(marked_text1, marked_text2,
+                                             fromfile=doc1.file.name,
+                                             tofile=doc2.file.name)
+
         elif comparison_type == 'toc_chapters':
             text1 = toc_to_text(index1) + "\n\n" + "\n".join([ch['text'] for ch in chapters1])
             text2 = toc_to_text(index2) + "\n\n" + "\n".join([ch['text'] for ch in chapters2])
+            similarity = get_overall_similarity(text1, text2)
+            marked_text1 = build_marked_text(content1, chapters1)
+            marked_text2 = build_marked_text(content2, chapters2)
+            diff_text = get_line_differences(marked_text1, marked_text2,
+                                             fromfile=doc1.file.name,
+                                             tofile=doc2.file.name)
+
+        elif comparison_type == 'toc_titles':
+            # NEW: Compare TOC titles only
+            toc1 = index1.get('toc', [])
+            toc2 = index2.get('toc', [])
+            toc_comparison = compare_toc_titles(toc1, toc2)
+            # No diff needed, similarity not meaningful
+            similarity = 0
+            diff_text = ''
+
         else:
+            # fallback to full
             text1, text2 = content1, content2
-
-        # Compute similarity on raw (or marked?) – use raw for consistency
-        similarity = get_overall_similarity(content1, content2)
-
-        # Build marked versions for diff (include chapter headers with page ranges)
-        marked_text1 = build_marked_text(content1, chapters1)
-        marked_text2 = build_marked_text(content2, chapters2)
-        diff_text = get_line_differences(
-            marked_text1,
-            marked_text2,
-            fromfile=doc1.file.name,
-            tofile=doc2.file.name
-        )
+            similarity = get_overall_similarity(text1, text2)
+            marked_text1 = build_marked_text(content1, chapters1)
+            marked_text2 = build_marked_text(content2, chapters2)
+            diff_text = get_line_differences(marked_text1, marked_text2,
+                                             fromfile=doc1.file.name,
+                                             tofile=doc2.file.name)
 
         job_data['status'] = 'done'
         job_data['progress'] = 100
-        job_data['similarity'] = round(similarity * 100, 2)
+        job_data['similarity'] = round(similarity * 100, 2) if comparison_type != 'toc_titles' else None
         job_data['diff_text'] = diff_text
         job_data['total_time'] = time.time() - job_data['start_time']
+        job_data['toc_comparison'] = toc_comparison  # store structured data
         cache.set(f'job_{job_id}', job_data, timeout=3600)
 
     except Exception as e:
@@ -178,6 +216,7 @@ def get_progress(request, job_id):
             'total_time': job_data['total_time'],
             'doc1_id': job_data['doc1_id'],
             'doc2_id': job_data['doc2_id'],
+            'toc_comparison': job_data.get('toc_comparison'),
         })
     elif job_data['status'] == 'error':
         response['error'] = job_data.get('error', 'Unknown error')
@@ -202,5 +241,6 @@ def result_page(request, job_id):
         'diff_text': job_data.get('diff_text', ''),
         'comparison_type': job_data.get('comparison_type', 'full'),
         'total_time': job_data.get('total_time', 0),
+        'toc_comparison': job_data.get('toc_comparison'),
     }
     return render(request, 'compare/result.html', context)

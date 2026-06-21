@@ -6,6 +6,7 @@ COMPARISON_CHOICES = [
     ('toc', 'Table of Contents (Index) only'),
     ('chapters', 'Chapters content only'),
     ('toc_chapters', 'Index + Chapters combined'),
+    ('toc_titles', 'Compare Chapter Titles only'),   # NEW
 ]
 
 class PDFUploadForm(forms.Form):

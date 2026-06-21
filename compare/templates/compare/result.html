@@ -69,6 +69,36 @@
         hr { margin: 30px 0; }
         .book-pages { font-size: 0.95em; color: #555; }
         .marker-note { font-size: 0.9em; color: #666; margin: 5px 0; }
+        .toc-compare-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 15px 0;
+            font-size: 0.95em;
+        }
+        .toc-compare-table th {
+            background: #f1f1f1;
+            padding: 8px;
+            text-align: right;
+            border: 1px solid #ddd;
+        }
+        .toc-compare-table td {
+            padding: 8px;
+            border: 1px solid #ddd;
+            vertical-align: top;
+        }
+        .toc-common { background: #e8f5e9; }
+        .toc-only1 { background: #ffebee; }
+        .toc-only2 { background: #fff3e0; }
+        .badge {
+            display: inline-block;
+            padding: 2px 8px;
+            border-radius: 12px;
+            font-size: 0.8em;
+            font-weight: bold;
+        }
+        .badge-common { background: #c8e6c9; color: #2e7d32; }
+        .badge-only1 { background: #ffcdd2; color: #c62828; }
+        .badge-only2 { background: #ffe0b2; color: #e65100; }
     </style>
 </head>
 <body>
@@ -81,25 +111,82 @@
     <p>
         <span class="mode-badge">🔍 Compared: {{ comparison_type }}</span>
     </p>
-    <p class="similarity">Overall similarity: <strong>{{ similarity }}%</strong></p>
-    <p>⏱️ Total comparison time: <strong>{{ total_time|floatformat:1 }} seconds</strong></p>
 
-    <h2>📄 Line differences (unified diff)</h2>
-    <div class="legend">
-        <span class="diff-deleted" style="background:#f8d7da; color:#721c24;">Red</span> = Lines in <strong>{{ doc1.file.name }}</strong> (deleted / different)
-        &nbsp;&nbsp;
-        <span class="diff-added" style="background:#d4edda; color:#155724;">Green</span> = Lines in <strong>{{ doc2.file.name }}</strong> (added / different)
-    </div>
-    <p class="marker-note">
-        💡 Chapter markers (e.g., <code>=== Chapter: Title (pages X–Y) ===</code>) are inserted before each chapter to show where changes occur.
-    </p>
-    <div class="diff-box">
-        {% if diff_text %}
-            {{ diff_text|colored_diff|safe }}
+    {% if comparison_type == 'toc_titles' %}
+        <!-- TOC Titles Comparison -->
+        <h2>📑 Chapter Title Comparison</h2>
+        {% if toc_comparison %}
+            <p>
+                <span class="badge badge-common">Common</span>
+                <span class="badge badge-only1">Only in {{ doc1.file.name }}</span>
+                <span class="badge badge-only2">Only in {{ doc2.file.name }}</span>
+            </p>
+            <table class="toc-compare-table">
+                <thead>
+                    <tr>
+                        <th>Chapter Title</th>
+                        <th>Page in {{ doc1.file.name }}</th>
+                        <th>Page in {{ doc2.file.name }}</th>
+                        <th>Status</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for item in toc_comparison.common %}
+                        <tr class="toc-common">
+                            <td>{{ item.title }}</td>
+                            <td>{{ item.page1 }}</td>
+                            <td>{{ item.page2 }}</td>
+                            <td><span class="badge badge-common">Common</span></td>
+                        </tr>
+                    {% endfor %}
+                    {% for item in toc_comparison.only1 %}
+                        <tr class="toc-only1">
+                            <td>{{ item.title }}</td>
+                            <td>{{ item.page }}</td>
+                            <td>—</td>
+                            <td><span class="badge badge-only1">Only in Book 1</span></td>
+                        </tr>
+                    {% endfor %}
+                    {% for item in toc_comparison.only2 %}
+                        <tr class="toc-only2">
+                            <td>{{ item.title }}</td>
+                            <td>—</td>
+                            <td>{{ item.page }}</td>
+                            <td><span class="badge badge-only2">Only in Book 2</span></td>
+                        </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+            <p><strong>Summary:</strong> 
+                {{ toc_comparison.common|length }} common, 
+                {{ toc_comparison.only1|length }} only in Book 1, 
+                {{ toc_comparison.only2|length }} only in Book 2.
+            </p>
         {% else %}
-            <div class="diff-none">✅ No differences found – texts are identical.</div>
+            <p>No TOC data available for comparison.</p>
         {% endif %}
-    </div>
+    {% else %}
+        <!-- Similarity and Diff for other modes -->
+        <p class="similarity">Overall similarity: <strong>{{ similarity }}%</strong></p>
+        <p>⏱️ Total comparison time: <strong>{{ total_time|floatformat:1 }} seconds</strong></p>
+
+        <h2>📄 Line differences (unified diff)</h2>
+        <div class="legend">
+            <span class="diff-deleted" style="background:#f8d7da; color:#721c24;">Red</span> = Lines in <strong>{{ doc1.file.name }}</strong> (deleted / different)
+            &nbsp;&nbsp;
+            <span class="diff-added" style="background:#d4edda; color:#155724;">Green</span> = Lines in <strong>{{ doc2.file.name }}</strong> (added / different)
+        </div>
+        <p class="marker-note">
+            💡 Chapter markers (e.g., <code>=== Chapter: Title (pages X–Y) ===</code>) are inserted before each chapter to show where changes occur.
+        </p>
+        <div class="diff-box">
+            {% if diff_text %}
+                {{ diff_text|colored_diff|safe }}
+            {% else %}
+                <div class="diff-none">✅ No differences found – texts are identical.</div>
+            {% endif %}
+        </div>
+    {% endif %}
 
     <hr>
 
