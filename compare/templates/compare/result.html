@@ -3,15 +3,144 @@
 <head>
     <title>Comparison Result</title>
     <style>
-        pre { background: #f4f4f4; padding: 10px; overflow: auto; border: 1px solid #ccc; }
+        body { font-family: Arial, sans-serif; margin: 20px; }
+        .doc-section { border: 1px solid #ccc; padding: 15px; margin: 20px 0; background: #fafafa; }
+        .chapter { background: #f9f9f9; padding: 10px; margin: 5px 0; border-left: 3px solid #007bff; }
+        pre { background: #f4f4f4; padding: 10px; overflow: auto; border: 1px solid #ddd; white-space: pre-wrap; }
+        .toc { list-style: none; padding-left: 0; }
+        .toc li { padding: 3px 0; }
+        .toc .level-1 { font-weight: bold; }
+        .toc .level-2 { margin-left: 20px; }
+        .toc .level-3 { margin-left: 40px; }
+        .collapsible {
+            cursor: pointer;
+            background: #e7e7e7;
+            padding: 8px 12px;
+            border: none;
+            width: 100%;
+            text-align: left;
+            margin: 5px 0;
+            font-weight: bold;
+        }
+        .collapsible:hover { background: #ddd; }
+        .content { display: none; padding: 10px; background: #fff; border: 1px solid #eee; }
+        .content.show { display: block; }
+        .similarity { font-size: 1.2em; color: #28a745; }
+        .diff pre { background: #f8f8f8; }
+        hr { margin: 30px 0; }
     </style>
 </head>
 <body>
-    <h1>Comparison Result</h1>
-    <p><strong>{{ doc1_title }}</strong> vs <strong>{{ doc2_title }}</strong></p>
-    <p>Overall similarity: <strong>{{ similarity }}%</strong></p>
-    <h2>Line differences (unified diff)</h2>
-    <pre>{{ diff_text }}</pre>
-    <p><a href="{% url 'compare:upload' %}">Compare another pair</a></p>
+    <h1>📚 Comparison Result</h1>
+    <p><strong>{{ doc1.file.name }}</strong> vs <strong>{{ doc2.file.name }}</strong></p>
+    <p class="similarity">Overall similarity: <strong>{{ similarity }}%</strong></p>
+
+    <h2>📄 Line differences (unified diff)</h2>
+    <div class="diff"><pre>{{ diff_text|default:"(No differences found or texts are empty.)" }}</pre></div>
+
+    <hr>
+
+    <!-- ===== DOCUMENT 1 ===== -->
+    <div class="doc-section">
+        <h2>📖 {{ doc1.file.name }}</h2>
+        <p><strong>Title:</strong> {{ doc1.title|default:"(not set)" }}</p>
+        <p><strong>Uploaded:</strong> {{ doc1.uploaded_at|date:"Y-m-d H:i" }}</p>
+
+        <!-- Index / TOC -->
+        <h3>📑 Table of Contents</h3>
+        {% if doc1.index.toc %}
+            <ul class="toc">
+                {% for entry in doc1.index.toc %}
+                    <li class="level-{{ entry.level }}">
+                        {{ entry.title }} (page {{ entry.page }})
+                    </li>
+                {% endfor %}
+            </ul>
+        {% else %}
+            <p><em>No table of contents found.</em></p>
+        {% endif %}
+
+        <!-- Chapters -->
+        <h3>📂 Chapters</h3>
+        {% if doc1.chapters %}
+            {% for ch in doc1.chapters %}
+                <div class="chapter">
+                    <strong>{{ ch.title }}</strong> (pages {{ ch.start_page }}–{{ ch.end_page }})
+                    <button class="collapsible" onclick="toggleContent(this)">Show chapter text</button>
+                    <div class="content">
+                        <pre>{{ ch.text|truncatewords:200 }}</pre>
+                    </div>
+                </div>
+            {% endfor %}
+        {% else %}
+            <p><em>No chapters extracted.</em></p>
+        {% endif %}
+
+        <!-- Full content -->
+        <h3>📄 Full Content</h3>
+        <button class="collapsible" onclick="toggleContent(this)">Show full text</button>
+        <div class="content">
+            <pre>{{ doc1.content|truncatewords:500 }}</pre>
+        </div>
+    </div>
+
+    <!-- ===== DOCUMENT 2 ===== -->
+    <div class="doc-section">
+        <h2>📖 {{ doc2.file.name }}</h2>
+        <p><strong>Title:</strong> {{ doc2.title|default:"(not set)" }}</p>
+        <p><strong>Uploaded:</strong> {{ doc2.uploaded_at|date:"Y-m-d H:i" }}</p>
+
+        <!-- Index / TOC -->
+        <h3>📑 Table of Contents</h3>
+        {% if doc2.index.toc %}
+            <ul class="toc">
+                {% for entry in doc2.index.toc %}
+                    <li class="level-{{ entry.level }}">
+                        {{ entry.title }} (page {{ entry.page }})
+                    </li>
+                {% endfor %}
+            </ul>
+        {% else %}
+            <p><em>No table of contents found.</em></p>
+        {% endif %}
+
+        <!-- Chapters -->
+        <h3>📂 Chapters</h3>
+        {% if doc2.chapters %}
+            {% for ch in doc2.chapters %}
+                <div class="chapter">
+                    <strong>{{ ch.title }}</strong> (pages {{ ch.start_page }}–{{ ch.end_page }})
+                    <button class="collapsible" onclick="toggleContent(this)">Show chapter text</button>
+                    <div class="content">
+                        <pre>{{ ch.text|truncatewords:200 }}</pre>
+                    </div>
+                </div>
+            {% endfor %}
+        {% else %}
+            <p><em>No chapters extracted.</em></p>
+        {% endif %}
+
+        <!-- Full content -->
+        <h3>📄 Full Content</h3>
+        <button class="collapsible" onclick="toggleContent(this)">Show full text</button>
+        <div class="content">
+            <pre>{{ doc2.content|truncatewords:500 }}</pre>
+        </div>
+    </div>
+
+    <p><a href="{% url 'compare:upload' %}">🔁 Compare another pair</a></p>
+
+    <script>
+        function toggleContent(btn) {
+            var content = btn.nextElementSibling;
+            if (content.classList.contains('show')) {
+                content.classList.remove('show');
+                btn.textContent = 'Show text';
+            } else {
+                content.classList.add('show');
+                btn.textContent = 'Hide text';
+            }
+        }
+    </script>
 </body>
 </html>
