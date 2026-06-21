@@ -3,9 +3,10 @@ from pathlib import Path
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 
-SECRET_KEY = 'django-insecure-*k&%_+v4a7x!9(1w@e2r5t6y8u9i0o-p[l]'
+# ✅ Load SECRET_KEY from environment variable (with fallback for development)
+SECRET_KEY = os.environ.get('DJANGO_SECRET_KEY', 'django-insecure-dev-only-change-in-production')
 
-DEBUG = True
+DEBUG = True  # Set to False in production
 
 ALLOWED_HOSTS = []
 
@@ -49,7 +50,6 @@ TEMPLATES = [
 
 WSGI_APPLICATION = 'books_comparison.wsgi.application'
 
-# ✅ FIXED DATABASE CONFIGURATION
 DATABASES = {
     'default': {
         'ENGINE': 'django.db.backends.sqlite3',
@@ -70,6 +70,9 @@ USE_I18N = True
 USE_TZ = True
 
 STATIC_URL = 'static/'
+# ✅ Added STATIC_ROOT for production (collectstatic)
+STATIC_ROOT = BASE_DIR / 'staticfiles'
+
 MEDIA_URL = '/media/'
 MEDIA_ROOT = os.path.join(BASE_DIR, 'media')
 
