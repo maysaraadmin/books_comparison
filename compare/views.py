@@ -3,10 +3,12 @@ import logging
 import threading
 import time
 import uuid
+import fitz
 from django.shortcuts import render, redirect
 from django.conf import settings
 from django.core.cache import cache
 from django.http import JsonResponse
+from django.core.exceptions import ObjectDoesNotExist
 from .forms import PDFUploadForm
 from .models import PDFDocument
 from .utils import (
@@ -18,25 +20,52 @@ from .utils import (
     compare_toc_titles,
 )
 
+# Import specific exceptions for better error handling
+class PDFProcessingError(Exception):
+    pass
+
 logger = logging.getLogger(__name__)
+
+# Lock for thread-safe cache updates
+progress_lock = threading.Lock()
 
 
 def upload_and_compare(request):
     if request.method == 'POST':
         form = PDFUploadForm(request.POST, request.FILES)
         if form.is_valid():
+            # Save files first to get paths
             doc1 = PDFDocument.objects.create(file=request.FILES['doc1'])
             doc2 = PDFDocument.objects.create(file=request.FILES['doc2'])
 
-            import fitz
             path1 = os.path.join(settings.MEDIA_ROOT, doc1.file.name)
             path2 = os.path.join(settings.MEDIA_ROOT, doc2.file.name)
-            with fitz.open(path1) as d1:
-                pages1 = d1.page_count
-            with fitz.open(path2) as d2:
-                pages2 = d2.page_count
+
+            # Validate PDF files after saving
+            try:
+                with fitz.open(path1) as d1:
+                    pages1 = d1.page_count
+            except Exception as e:
+                doc1.delete()
+                doc2.delete()
+                return render(request, 'compare/error.html', {'message': f'Invalid PDF file 1: {str(e)}'})
+
+            try:
+                with fitz.open(path2) as d2:
+                    pages2 = d2.page_count
+            except Exception as e:
+                doc1.delete()
+                doc2.delete()
+                return render(request, 'compare/error.html', {'message': f'Invalid PDF file 2: {str(e)}'})
+
+            # Validate page counts
+            if pages1 == 0 or pages2 == 0:
+                doc1.delete()
+                doc2.delete()
+                return render(request, 'compare/error.html', {'message': 'PDF files must have at least one page.'})
 
             job_id = str(uuid.uuid4())
+            job_token = str(uuid.uuid4())
             job_data = {
                 'status': 'processing',
                 'progress': 0,
@@ -51,14 +80,14 @@ def upload_and_compare(request):
                 'doc2_pages': pages2,
                 'doc1_name': doc1.file.name,
                 'doc2_name': doc2.file.name,
+                'token': job_token,
             }
             cache.set(f'job_{job_id}', job_data, timeout=3600)
 
             thread = threading.Thread(target=process_comparison, args=(job_id,))
-            thread.daemon = True
             thread.start()
 
-            return redirect('compare:progress_page', job_id=job_id)
+            return redirect('compare:progress_page', job_id=job_id, token=job_token)
     else:
         form = PDFUploadForm()
     return render(request, 'compare/upload.html', {'form': form})
@@ -69,23 +98,32 @@ def process_comparison(job_id):
     if not job_data:
         return
 
-    doc1 = PDFDocument.objects.get(id=job_data['doc1_id'])
-    doc2 = PDFDocument.objects.get(id=job_data['doc2_id'])
+    try:
+        doc1 = PDFDocument.objects.get(id=job_data['doc1_id'])
+        doc2 = PDFDocument.objects.get(id=job_data['doc2_id'])
+    except ObjectDoesNotExist:
+        logger.error(f"Document not found for job {job_id}")
+        job_data['status'] = 'error'
+        job_data['error'] = 'Document not found'
+        cache.set(f'job_{job_id}', job_data, timeout=3600)
+        return
+
     path1 = os.path.join(settings.MEDIA_ROOT, doc1.file.name)
     path2 = os.path.join(settings.MEDIA_ROOT, doc2.file.name)
 
     def update_progress(current_page, total_pages, doc_index):
-        job_data = cache.get(f'job_{job_id}')
-        if not job_data:
-            return
-        if doc_index == 1:
-            job_data['pages_done_doc1'] = current_page
-        else:
-            job_data['pages_done_doc2'] = current_page
-        pages_done = job_data['pages_done_doc1'] + job_data['pages_done_doc2']
-        total = job_data['total_pages']
-        job_data['progress'] = int((pages_done / total) * 100) if total > 0 else 0
-        cache.set(f'job_{job_id}', job_data, timeout=3600)
+        with progress_lock:
+            job_data = cache.get(f'job_{job_id}')
+            if not job_data:
+                return
+            if doc_index == 1:
+                job_data['pages_done_doc1'] = current_page
+            else:
+                job_data['pages_done_doc2'] = current_page
+            pages_done = job_data['pages_done_doc1'] + job_data['pages_done_doc2']
+            total = job_data['total_pages']
+            job_data['progress'] = int((pages_done / total) * 100) if total > 0 else 0
+            cache.set(f'job_{job_id}', job_data, timeout=3600)
 
     try:
         content1, index1, chapters1 = extract_pdf_with_progress(
@@ -178,19 +216,25 @@ def process_comparison(job_id):
         job_data['toc_comparison'] = toc_comparison  # store structured data
         cache.set(f'job_{job_id}', job_data, timeout=3600)
 
-    except Exception as e:
-        logger.error(f"Error in background job {job_id}: {e}")
+    except (fitz.FileDataError, fitz.EmptyFileError, OSError) as e:
+        logger.error(f"PDF processing error in job {job_id}: {e}")
         job_data['status'] = 'error'
-        job_data['error'] = str(e)
+        job_data['error'] = f'PDF processing error: {str(e)}'
+        cache.set(f'job_{job_id}', job_data, timeout=3600)
+    except Exception as e:
+        logger.error(f"Unexpected error in background job {job_id}: {e}")
+        job_data['status'] = 'error'
+        job_data['error'] = f'Unexpected error: {str(e)}'
         cache.set(f'job_{job_id}', job_data, timeout=3600)
 
 
-def progress_page(request, job_id):
+def progress_page(request, job_id, token):
     job_data = cache.get(f'job_{job_id}')
-    if not job_data:
+    if not job_data or job_data.get('token') != token:
         return render(request, 'compare/error.html', {'message': 'Job not found or expired.'})
     context = {
         'job_id': job_id,
+        'token': token,
         'doc1_name': job_data['doc1_name'],
         'doc2_name': job_data['doc2_name'],
         'doc1_pages': job_data['doc1_pages'],
@@ -199,10 +243,10 @@ def progress_page(request, job_id):
     return render(request, 'compare/progress.html', context)
 
 
-def get_progress(request, job_id):
+def get_progress(request, job_id, token):
     job_data = cache.get(f'job_{job_id}')
-    if not job_data:
-        return JsonResponse({'error': 'Job not found'}, status=404)
+    if not job_data or job_data.get('token') != token:
+        return JsonResponse({'error': 'Job not found or invalid token'}, status=404)
 
     response = {
         'status': job_data['status'],
@@ -223,14 +267,17 @@ def get_progress(request, job_id):
     return JsonResponse(response)
 
 
-def result_page(request, job_id):
+def result_page(request, job_id, token):
     """Display the final comparison result."""
     job_data = cache.get(f'job_{job_id}')
-    if not job_data or job_data.get('status') != 'done':
+    if not job_data or job_data.get('token') != token or job_data.get('status') != 'done':
         return render(request, 'compare/error.html', {'message': 'Result not ready or expired.'})
 
-    doc1 = PDFDocument.objects.get(id=job_data['doc1_id'])
-    doc2 = PDFDocument.objects.get(id=job_data['doc2_id'])
+    try:
+        doc1 = PDFDocument.objects.get(id=job_data['doc1_id'])
+        doc2 = PDFDocument.objects.get(id=job_data['doc2_id'])
+    except ObjectDoesNotExist:
+        return render(request, 'compare/error.html', {'message': 'Document not found.'})
 
     context = {
         'doc1': doc1,

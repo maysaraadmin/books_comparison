@@ -34,18 +34,29 @@ def get_available_languages():
     try:
         output = subprocess.check_output([pytesseract.pytesseract.tesseract_cmd, '--list-langs'],
                                          stderr=subprocess.STDOUT,
-                                         text=True)
+                                         text=True,
+                                         timeout=10)
         lines = output.splitlines()
         langs = [line.strip() for line in lines[1:] if line.strip()]
         return langs
+    except subprocess.TimeoutExpired:
+        logger.warning("Tesseract language listing timed out")
+        return []
     except Exception as e:
         logger.warning(f"Could not list Tesseract languages: {e}")
         return []
 
-AVAILABLE_LANGS = get_available_languages()
-logger.info(f"Tesseract available languages: {AVAILABLE_LANGS}")
+# Lazy-load available languages to avoid blocking at import time
+_AVAILABLE_LANGS = None
 
-if 'ara' in AVAILABLE_LANGS:
+def get_available_languages_cached():
+    global _AVAILABLE_LANGS
+    if _AVAILABLE_LANGS is None:
+        _AVAILABLE_LANGS = get_available_languages()
+        logger.info(f"Tesseract available languages: {_AVAILABLE_LANGS}")
+    return _AVAILABLE_LANGS
+
+if 'ara' in get_available_languages_cached():
     OCR_LANG = 'ara+eng'
     logger.info("Using Arabic+English OCR")
 else:
@@ -91,43 +102,43 @@ def get_page_text(doc, page_num):
 # PDF extraction with progress
 # ------------------------------------------------------------
 def extract_pdf_with_progress(pdf_path, progress_callback):
-    doc = fitz.open(pdf_path)
-    page_count = doc.page_count
-    page_texts = []
+    with fitz.open(pdf_path) as doc:
+        page_count = doc.page_count
+        page_texts = []
 
-    for pnum in range(page_count):
-        text = get_page_text(doc, pnum)
-        page_texts.append(text)
-        if progress_callback:
-            progress_callback(pnum + 1, page_count)
+        for pnum in range(page_count):
+            text = get_page_text(doc, pnum)
+            page_texts.append(text)
+            if progress_callback:
+                progress_callback(pnum + 1, page_count)
 
-    full_text = "\n".join(page_texts)
+        full_text = "\n".join(page_texts)
 
-    toc = doc.get_toc()
-    index = {"toc": [{"level": lvl, "title": title, "page": page} for lvl, title, page in toc]}
+        toc = doc.get_toc()
+        index = {"toc": [{"level": lvl, "title": title, "page": page} for lvl, title, page in toc]}
 
-    chapters = []
-    if toc:
-        toc_sorted = sorted(toc, key=lambda x: x[2])
-        for i, (level, title, page) in enumerate(toc_sorted):
-            start_page = page - 1
-            end_page = (toc_sorted[i+1][2] - 1) if i+1 < len(toc_sorted) else page_count - 1
-            chapter_text = "\n".join(page_texts[start_page:end_page+1])
+        chapters = []
+        if toc:
+            toc_sorted = sorted(toc, key=lambda x: x[2])
+            for i, (level, title, page) in enumerate(toc_sorted):
+                start_page = max(0, page - 1)
+                end_page = min(page_count - 1, (toc_sorted[i+1][2] - 1) if i+1 < len(toc_sorted) else page_count - 1)
+                if start_page <= end_page:
+                    chapter_text = "\n".join(page_texts[start_page:end_page+1])
+                    chapters.append({
+                        "title": title,
+                        "start_page": page,
+                        "end_page": end_page + 1 if i+1 < len(toc_sorted) else page_count,
+                        "text": chapter_text
+                    })
+        else:
             chapters.append({
-                "title": title,
-                "start_page": page,
-                "end_page": end_page + 1 if i+1 < len(toc_sorted) else page_count,
-                "text": chapter_text
+                "title": "Full Document",
+                "start_page": 1,
+                "end_page": page_count,
+                "text": full_text
             })
-    else:
-        chapters.append({
-            "title": "Full Document",
-            "start_page": 1,
-            "end_page": page_count,
-            "text": full_text
-        })
 
-    doc.close()
     return full_text, index, chapters
 
 # ------------------------------------------------------------
@@ -166,9 +177,11 @@ def toc_to_text(index_dict):
 # Similarity and diff
 # ------------------------------------------------------------
 def get_overall_similarity(text1, text2):
+    if not text1.strip() and not text2.strip():
+        return 1.0  # Both empty = identical
     if not text1.strip() or not text2.strip():
-        return 0.0
-    vectorizer = TfidfVectorizer(stop_words=None)
+        return 0.0  # One empty = no similarity
+    vectorizer = TfidfVectorizer()
     try:
         tfidf_matrix = vectorizer.fit_transform([text1, text2])
         vectors = tfidf_matrix.toarray()
@@ -198,8 +211,8 @@ def compare_toc_titles(toc1, toc2):
         return title.strip()
 
     # Build dicts mapping title -> page for each
-    dict1 = {normalize(entry['title']): entry['page'] for entry in toc1}
-    dict2 = {normalize(entry['title']): entry['page'] for entry in toc2}
+    dict1 = {normalize(entry.get('title', '')): entry.get('page', 0) for entry in toc1}
+    dict2 = {normalize(entry.get('title', '')): entry.get('page', 0) for entry in toc2}
 
     titles1 = set(dict1.keys())
     titles2 = set(dict2.keys())
@@ -212,10 +225,10 @@ def compare_toc_titles(toc1, toc2):
     only1 = [{'title': t, 'page': dict1[t]} for t in only1_titles]
     only2 = [{'title': t, 'page': dict2[t]} for t in only2_titles]
 
-    # Sort by title (Arabic sorting may not be perfect but acceptable)
-    common.sort(key=lambda x: x['title'])
-    only1.sort(key=lambda x: x['title'])
-    only2.sort(key=lambda x: x['title'])
+    # Sort by page number (ascending order)
+    common.sort(key=lambda x: x['page1'])
+    only1.sort(key=lambda x: x['page'])
+    only2.sort(key=lambda x: x['page'])
 
     return {
         'common': common,

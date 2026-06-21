@@ -29,11 +29,12 @@
 
     <script>
         const jobId = "{{ job_id }}";
+        const token = "{{ token }}";
         const pollInterval = 1000;
         let startTime = Date.now();
 
         function fetchProgress() {
-            fetch(`/api/progress/${jobId}/`)
+            fetch(`/api/progress/${jobId}/${token}/`)
                 .then(response => response.json())
                 .then(data => {
                     if (data.error) {
@@ -49,7 +50,7 @@
                     if (data.status === 'done') {
                         document.getElementById('statusText').textContent = `Done in ${Math.round(data.total_time)}s`;
                         setTimeout(() => {
-                            window.location.href = `/result/${jobId}/`;
+                            window.location.href = `/result/${jobId}/${token}/`;
                         }, 2000);
                     } else if (data.status === 'error') {
                         document.getElementById('statusText').textContent = 'Error: ' + data.error;

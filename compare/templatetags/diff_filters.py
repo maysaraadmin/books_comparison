@@ -1,4 +1,5 @@
 from django import template
+from django.utils.html import escape
 
 register = template.Library()
 
@@ -11,7 +12,7 @@ def colored_diff(diff_text):
     lines = diff_text.splitlines()
     html_lines = []
     for line in lines:
-        escaped = line.replace('&', '&amp;').replace('<', '&lt;').replace('>', '&gt;')
+        escaped = escape(line)
         if line.startswith('+'):
             html_lines.append(f'<div class="diff-added">{escaped}</div>')
         elif line.startswith('-'):
