@@ -1,9 +1,11 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Comparing...</title>
     <style>
-        body { font-family: Arial, sans-serif; margin: 40px; }
+        body { font-family: Arial, Helvetica, sans-serif; margin: 40px; }
         .info { margin-bottom: 20px; }
         .progress-container { width: 100%; background: #f0f0f0; border-radius: 10px; overflow: hidden; height: 30px; margin: 20px 0; }
         .progress-bar { height: 100%; background: #007bff; width: 0%; transition: width 0.5s; }
@@ -27,7 +29,7 @@
 
     <script>
         const jobId = "{{ job_id }}";
-        const pollInterval = 1000; // ms
+        const pollInterval = 1000;
         let startTime = Date.now();
 
         function fetchProgress() {
@@ -38,24 +40,20 @@
                         document.getElementById('statusText').textContent = 'Error: ' + data.error;
                         return;
                     }
-                    // Update progress
                     document.getElementById('progressBar').style.width = data.progress + '%';
                     document.getElementById('statusText').textContent = data.status === 'done' ? 'Complete!' : 'Processing...';
 
-                    // Elapsed time
                     const elapsed = data.elapsed || (Date.now() - startTime) / 1000;
                     document.getElementById('timer').textContent = `Elapsed: ${Math.round(elapsed)}s`;
 
                     if (data.status === 'done') {
                         document.getElementById('statusText').textContent = `Done in ${Math.round(data.total_time)}s`;
-                        // ✅ FIXED: redirect to correct URL (without "compare/")
                         setTimeout(() => {
                             window.location.href = `/result/${jobId}/`;
                         }, 2000);
                     } else if (data.status === 'error') {
                         document.getElementById('statusText').textContent = 'Error: ' + data.error;
                     } else {
-                        // Continue polling
                         setTimeout(fetchProgress, pollInterval);
                     }
                 })
@@ -65,7 +63,6 @@
                 });
         }
 
-        // Start polling
         setTimeout(fetchProgress, 500);
     </script>
 </body>

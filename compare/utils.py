@@ -26,7 +26,7 @@ else:
 
 
 def get_page_text(doc, page_num):
-    """Extract text from a single page with OCR fallback."""
+    """Extract text from a single page with OCR fallback (Arabic support)."""
     page = doc[page_num]
     text = page.get_text()
     if text.strip():
@@ -38,7 +38,7 @@ def get_page_text(doc, page_num):
         pix = page.get_pixmap(matrix=mat)
         img_data = pix.tobytes("png")
         img = Image.open(io.BytesIO(img_data))
-        ocr_text = pytesseract.image_to_string(img)
+        ocr_text = pytesseract.image_to_string(img, lang='ara+eng')
         return ocr_text
     except Exception as e:
         logger.warning(f"OCR failed for page {page_num+1}: {e}")
@@ -46,10 +46,7 @@ def get_page_text(doc, page_num):
 
 
 def extract_pdf_with_progress(pdf_path, progress_callback):
-    """
-    Extract full text, TOC, and chapters, reporting progress per page.
-    progress_callback(current_page, total_pages)
-    """
+    """Extract full text, TOC, and chapters, reporting progress per page."""
     doc = fitz.open(pdf_path)
     page_count = doc.page_count
     page_texts = []
@@ -90,6 +87,28 @@ def extract_pdf_with_progress(pdf_path, progress_callback):
     return full_text, index, chapters
 
 
+def build_marked_text(full_text, chapters):
+    """
+    Insert chapter markers (with page ranges) into the text.
+    Returns a string with markers like:
+    === Chapter 1: Title (pages 1-5) ===
+    ...
+    """
+    if not chapters:
+        return full_text
+
+    marked_parts = []
+    for ch in chapters:
+        title = ch.get('title', 'Untitled')
+        start = ch.get('start_page', '?')
+        end = ch.get('end_page', '?')
+        text = ch.get('text', '')
+        marker = f"=== Chapter: {title} (pages {start}–{end}) ===\n"
+        marked_parts.append(marker + text)
+
+    return "\n\n".join(marked_parts)
+
+
 def toc_to_text(index_dict):
     toc = index_dict.get('toc', [])
     if not toc:
@@ -116,8 +135,9 @@ def get_overall_similarity(text1, text2):
         return 0.0
 
 
-def get_line_differences(text1, text2):
+def get_line_differences(text1, text2, fromfile='First Book', tofile='Second Book'):
+    """Return unified diff with file names."""
     lines1 = text1.splitlines()
     lines2 = text2.splitlines()
-    diff = difflib.unified_diff(lines1, lines2, lineterm='')
+    diff = difflib.unified_diff(lines1, lines2, fromfile=fromfile, tofile=tofile, lineterm='')
     return '\n'.join(diff)

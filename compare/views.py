@@ -14,6 +14,7 @@ from .utils import (
     get_overall_similarity,
     get_line_differences,
     toc_to_text,
+    build_marked_text,
 )
 
 logger = logging.getLogger(__name__)
@@ -119,8 +120,18 @@ def process_comparison(job_id):
         else:
             text1, text2 = content1, content2
 
-        similarity = get_overall_similarity(text1, text2)
-        diff_text = get_line_differences(text1, text2)
+        # Compute similarity on raw (or marked?) – use raw for consistency
+        similarity = get_overall_similarity(content1, content2)
+
+        # Build marked versions for diff (include chapter headers with page ranges)
+        marked_text1 = build_marked_text(content1, chapters1)
+        marked_text2 = build_marked_text(content2, chapters2)
+        diff_text = get_line_differences(
+            marked_text1,
+            marked_text2,
+            fromfile=doc1.file.name,
+            tofile=doc2.file.name
+        )
 
         job_data['status'] = 'done'
         job_data['progress'] = 100
@@ -185,6 +196,8 @@ def result_page(request, job_id):
     context = {
         'doc1': doc1,
         'doc2': doc2,
+        'doc1_pages': job_data.get('doc1_pages', '?'),
+        'doc2_pages': job_data.get('doc2_pages', '?'),
         'similarity': job_data.get('similarity', 0),
         'diff_text': job_data.get('diff_text', ''),
         'comparison_type': job_data.get('comparison_type', 'full'),
