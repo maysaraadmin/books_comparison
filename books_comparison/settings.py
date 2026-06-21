@@ -3,11 +3,8 @@ from pathlib import Path
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 
-# ✅ Load SECRET_KEY from environment variable (with fallback for development)
 SECRET_KEY = os.environ.get('DJANGO_SECRET_KEY', 'django-insecure-dev-only-change-in-production')
-
-DEBUG = True  # Set to False in production
-
+DEBUG = True
 ALLOWED_HOSTS = []
 
 INSTALLED_APPS = [
@@ -17,7 +14,7 @@ INSTALLED_APPS = [
     'django.contrib.sessions',
     'django.contrib.messages',
     'django.contrib.staticfiles',
-    'compare',          # our app
+    'compare',
 ]
 
 MIDDLEWARE = [
@@ -70,10 +67,17 @@ USE_I18N = True
 USE_TZ = True
 
 STATIC_URL = 'static/'
-# ✅ Added STATIC_ROOT for production (collectstatic)
 STATIC_ROOT = BASE_DIR / 'staticfiles'
 
 MEDIA_URL = '/media/'
 MEDIA_ROOT = os.path.join(BASE_DIR, 'media')
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
+
+# Cache backend (for progress tracking)
+CACHES = {
+    'default': {
+        'BACKEND': 'django.core.cache.backends.locmem.LocMemCache',
+        'LOCATION': 'unique-snowflake',
+    }
+}

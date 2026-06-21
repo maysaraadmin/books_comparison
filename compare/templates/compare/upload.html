@@ -2,12 +2,34 @@
 <html>
 <head>
     <title>Compare PDF Books</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 40px; }
+        form { max-width: 600px; }
+        .field { margin-bottom: 20px; }
+        .radio-group label { display: block; margin: 5px 0; }
+        button { padding: 10px 20px; background: #007bff; color: white; border: none; border-radius: 4px; cursor: pointer; }
+        button:hover { background: #0056b3; }
+    </style>
 </head>
 <body>
-    <h1>Upload two PDF books to compare</h1>
+    <h1>📚 Upload two PDF books to compare</h1>
     <form method="post" enctype="multipart/form-data">
         {% csrf_token %}
-        {{ form.as_p }}
+        {% for field in form %}
+            <div class="field">
+                {{ field.label_tag }}
+                {% if field.name == 'comparison_type' %}
+                    <div class="radio-group">
+                        {% for choice in field %}
+                            <label>{{ choice.tag }} {{ choice.choice_label }}</label>
+                        {% endfor %}
+                    </div>
+                {% else %}
+                    {{ field }}
+                {% endif %}
+                {{ field.errors }}
+            </div>
+        {% endfor %}
         <button type="submit">Compare</button>
     </form>
 </body>

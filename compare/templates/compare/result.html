@@ -28,11 +28,15 @@
         .similarity { font-size: 1.2em; color: #28a745; }
         .diff pre { background: #f8f8f8; }
         hr { margin: 30px 0; }
+        .mode-badge { background: #f0f0f0; padding: 6px 12px; border-radius: 20px; font-size: 0.9em; display: inline-block; }
     </style>
 </head>
 <body>
     <h1>📚 Comparison Result</h1>
     <p><strong>{{ doc1.file.name }}</strong> vs <strong>{{ doc2.file.name }}</strong></p>
+    <p>
+        <span class="mode-badge">🔍 Compared: {{ comparison_type }}</span>
+    </p>
     <p class="similarity">Overall similarity: <strong>{{ similarity }}%</strong></p>
 
     <h2>📄 Line differences (unified diff)</h2>
@@ -40,13 +44,12 @@
 
     <hr>
 
-    <!-- ===== DOCUMENT 1 ===== -->
+    <!-- Document 1 -->
     <div class="doc-section">
         <h2>📖 {{ doc1.file.name }}</h2>
         <p><strong>Title:</strong> {{ doc1.title|default:"(not set)" }}</p>
         <p><strong>Uploaded:</strong> {{ doc1.uploaded_at|date:"Y-m-d H:i" }}</p>
 
-        <!-- Index / TOC -->
         <h3>📑 Table of Contents</h3>
         {% if doc1.index.toc %}
             <ul class="toc">
@@ -60,7 +63,6 @@
             <p><em>No table of contents found.</em></p>
         {% endif %}
 
-        <!-- Chapters -->
         <h3>📂 Chapters</h3>
         {% if doc1.chapters %}
             {% for ch in doc1.chapters %}
@@ -76,7 +78,6 @@
             <p><em>No chapters extracted.</em></p>
         {% endif %}
 
-        <!-- Full content -->
         <h3>📄 Full Content</h3>
         <button class="collapsible" onclick="toggleContent(this)">Show full text</button>
         <div class="content">
@@ -84,13 +85,12 @@
         </div>
     </div>
 
-    <!-- ===== DOCUMENT 2 ===== -->
+    <!-- Document 2 -->
     <div class="doc-section">
         <h2>📖 {{ doc2.file.name }}</h2>
         <p><strong>Title:</strong> {{ doc2.title|default:"(not set)" }}</p>
         <p><strong>Uploaded:</strong> {{ doc2.uploaded_at|date:"Y-m-d H:i" }}</p>
 
-        <!-- Index / TOC -->
         <h3>📑 Table of Contents</h3>
         {% if doc2.index.toc %}
             <ul class="toc">
@@ -104,7 +104,6 @@
             <p><em>No table of contents found.</em></p>
         {% endif %}
 
-        <!-- Chapters -->
         <h3>📂 Chapters</h3>
         {% if doc2.chapters %}
             {% for ch in doc2.chapters %}
@@ -120,7 +119,6 @@
             <p><em>No chapters extracted.</em></p>
         {% endif %}
 
-        <!-- Full content -->
         <h3>📄 Full Content</h3>
         <button class="collapsible" onclick="toggleContent(this)">Show full text</button>
         <div class="content">
@@ -129,7 +127,7 @@
     </div>
 
     <p><a href="{% url 'compare:upload' %}">🔁 Compare another pair</a></p>
-
+<p>⏱️ Total comparison time: <strong>{{ total_time|floatformat:1 }} seconds</strong></p>
     <script>
         function toggleContent(btn) {
             var content = btn.nextElementSibling;

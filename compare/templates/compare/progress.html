@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Comparing...</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 40px; }
+        .info { margin-bottom: 20px; }
+        .progress-container { width: 100%; background: #f0f0f0; border-radius: 10px; overflow: hidden; height: 30px; margin: 20px 0; }
+        .progress-bar { height: 100%; background: #007bff; width: 0%; transition: width 0.5s; }
+        .status-text { font-weight: bold; }
+        .timer { font-size: 1.1em; }
+    </style>
+</head>
+<body>
+    <h1>⏳ Comparing Books</h1>
+    <div class="info">
+        <p><strong>{{ doc1_name }}</strong> – {{ doc1_pages }} pages</p>
+        <p><strong>{{ doc2_name }}</strong> – {{ doc2_pages }} pages</p>
+        <p>Total pages to process: <span id="totalPages">{{ doc1_pages|add:doc2_pages }}</span></p>
+    </div>
+
+    <div class="progress-container">
+        <div class="progress-bar" id="progressBar" style="width: 0%;"></div>
+    </div>
+    <p class="status-text" id="statusText">Processing...</p>
+    <p class="timer" id="timer">Elapsed: 0s</p>
+
+    <script>
+        const jobId = "{{ job_id }}";
+        const pollInterval = 1000; // ms
+        let startTime = Date.now();
+
+        function fetchProgress() {
+            fetch(`/api/progress/${jobId}/`)
+                .then(response => response.json())
+                .then(data => {
+                    if (data.error) {
+                        document.getElementById('statusText').textContent = 'Error: ' + data.error;
+                        return;
+                    }
+                    // Update progress
+                    document.getElementById('progressBar').style.width = data.progress + '%';
+                    document.getElementById('statusText').textContent = data.status === 'done' ? 'Complete!' : 'Processing...';
+
+                    // Elapsed time
+                    const elapsed = data.elapsed || (Date.now() - startTime) / 1000;
+                    document.getElementById('timer').textContent = `Elapsed: ${Math.round(elapsed)}s`;
+
+                    if (data.status === 'done') {
+                        // Show total time and redirect to result
+                        document.getElementById('statusText').textContent = `Done in ${Math.round(data.total_time)}s`;
+                        setTimeout(() => {
+                            window.location.href = `/compare/result/${jobId}/`;
+                        }, 2000);
+                    } else if (data.status === 'error') {
+                        document.getElementById('statusText').textContent = 'Error: ' + data.error;
+                    } else {
+                        // Continue polling
+                        setTimeout(fetchProgress, pollInterval);
+                    }
+                })
+                .catch(err => {
+                    console.error(err);
+                    setTimeout(fetchProgress, pollInterval);
+                });
+        }
+
+        // Start polling
+        setTimeout(fetchProgress, 500);
+    </script>
+</body>
+</html>
