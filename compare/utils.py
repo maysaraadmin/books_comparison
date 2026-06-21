@@ -8,7 +8,6 @@ from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.metrics.pairwise import cosine_similarity
 import difflib
 import logging
-import time
 
 logger = logging.getLogger(__name__)
 
@@ -27,13 +26,12 @@ else:
 
 
 def get_page_text(doc, page_num):
-    """Extract text from a single page (without PDF path, not needed)."""
+    """Extract text from a single page with OCR fallback."""
     page = doc[page_num]
     text = page.get_text()
     if text.strip():
         return text
 
-    # OCR fallback
     try:
         zoom = 300 / 72
         mat = fitz.Matrix(zoom, zoom)
@@ -59,17 +57,14 @@ def extract_pdf_with_progress(pdf_path, progress_callback):
     for pnum in range(page_count):
         text = get_page_text(doc, pnum)
         page_texts.append(text)
-        # Report progress (1-based page number)
         if progress_callback:
             progress_callback(pnum + 1, page_count)
 
     full_text = "\n".join(page_texts)
 
-    # Table of Contents
     toc = doc.get_toc()
     index = {"toc": [{"level": lvl, "title": title, "page": page} for lvl, title, page in toc]}
 
-    # Chapters
     chapters = []
     if toc:
         toc_sorted = sorted(toc, key=lambda x: x[2])

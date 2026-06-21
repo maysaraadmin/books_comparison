@@ -47,10 +47,10 @@
                     document.getElementById('timer').textContent = `Elapsed: ${Math.round(elapsed)}s`;
 
                     if (data.status === 'done') {
-                        // Show total time and redirect to result
                         document.getElementById('statusText').textContent = `Done in ${Math.round(data.total_time)}s`;
+                        // ✅ FIXED: redirect to correct URL (without "compare/")
                         setTimeout(() => {
-                            window.location.href = `/compare/result/${jobId}/`;
+                            window.location.href = `/result/${jobId}/`;
                         }, 2000);
                     } else if (data.status === 'error') {
                         document.getElementById('statusText').textContent = 'Error: ' + data.error;

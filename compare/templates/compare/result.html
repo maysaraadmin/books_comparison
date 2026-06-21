@@ -38,6 +38,7 @@
         <span class="mode-badge">🔍 Compared: {{ comparison_type }}</span>
     </p>
     <p class="similarity">Overall similarity: <strong>{{ similarity }}%</strong></p>
+    <p>⏱️ Total comparison time: <strong>{{ total_time|floatformat:1 }} seconds</strong></p>
 
     <h2>📄 Line differences (unified diff)</h2>
     <div class="diff"><pre>{{ diff_text|default:"(No differences found or texts are empty.)" }}</pre></div>
@@ -127,7 +128,7 @@
     </div>
 
     <p><a href="{% url 'compare:upload' %}">🔁 Compare another pair</a></p>
-<p>⏱️ Total comparison time: <strong>{{ total_time|floatformat:1 }} seconds</strong></p>
+
     <script>
         function toggleContent(btn) {
             var content = btn.nextElementSibling;
